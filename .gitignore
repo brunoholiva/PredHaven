@@ -1,0 +1,4 @@
+.vscode/
+pyproject.toml
+.pytest_cache/
+__pycache__/
