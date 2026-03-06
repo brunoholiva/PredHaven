@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from src.predictors import Predictor, RandomForestPredictor
+from src.predictors import Predictor, SKLearnFingerprintPredictor
 
 
 class MockPredictor(Predictor):
@@ -44,7 +44,7 @@ def test_predict_pipeline_empty_input():
 def test_rf_prepare_input_generates_correct_arrays():
     """Test if RDKit outputs the exact shape and type we need for Scikit-
     Learn."""
-    predictor = RandomForestPredictor()
+    predictor = SKLearnFingerprintPredictor()
     valid_smiles = ["CCO", "c1ccccc1"]
 
     fps = predictor.prepare_input(valid_smiles)
@@ -63,7 +63,7 @@ class DummySklearnModel:
 
 def test_rf_predict_probability_slices_correctly():
     """Test if we correctly slice the active class probabilities."""
-    predictor = RandomForestPredictor()
+    predictor = SKLearnFingerprintPredictor()
     predictor.model = DummySklearnModel()
 
     fake_fingerprints = np.zeros((3, 2048))
@@ -79,7 +79,7 @@ def test_rf_predict_probability_slices_correctly():
 
 def test_rf_unloaded_model_raises_error():
     """Test that the class throws an error if we forget to load the model."""
-    predictor = RandomForestPredictor()
+    predictor = SKLearnFingerprintPredictor()
     fake_fingerprints = np.zeros((1, 2048))
 
     with pytest.raises(ValueError, match="Model not loaded"):

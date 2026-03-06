@@ -45,22 +45,22 @@ class Predictor(ABC):
         return self.predict_probability(prepared_input)
 
 
-class RandomForestPredictor(Predictor):
-    """Predictor implementation using a SKLearn Random Forest model (trained
+class SKLearnFingerprintPredictor(Predictor):
+    """Predictor implementation using a SKLearn model/pipeline (trained
     with ECFP4 fingerprints)."""
 
     def __init__(self):
         self.model = None
 
     def load_model(self, model_path: str) -> None:
-        """Load the Random Forest model from the specified path."""
+        """Load the model from the specified path."""
         import joblib
 
         self.model = joblib.load(model_path)
 
     def prepare_input(self, valid_smiles_list: List[str]) -> np.ndarray:
         """Takes a list of valid SMILES strings and converts them into ECFP4
-        fingerprints suitable for the Random Forest model.
+        fingerprints suitable for the SKLearn model.
 
         Parameters
         ----------
