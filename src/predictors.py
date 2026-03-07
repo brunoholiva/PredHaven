@@ -96,8 +96,10 @@ class SKLearnFingerprintPredictor(Predictor):
         active class for each input."""
         # sklearn returns probabilities for both classes
         if self.model is None:
-            raise ValueError("Model not loaded. Please call load_model() first.")
-        
+            raise ValueError(
+                "Model not loaded. Please call load_model() first."
+            )
+
         probabilities = self.model.predict_proba(prepared_input)[:, 1]
 
         return probabilities.tolist()
