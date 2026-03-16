@@ -1,23 +1,26 @@
-import pandas as pd
-import matplotlib.pyplot as plt
-from sklearn.metrics import roc_curve, precision_recall_curve, auc
+"""Provide plotting utilities for evaluated model predictions."""
+
 from typing import TYPE_CHECKING
+
+import matplotlib.pyplot as plt
+from sklearn.metrics import auc, precision_recall_curve, roc_curve
 
 if TYPE_CHECKING:
     from src.evaluator import ModelEvaluator
 
 
 class Visualizer:
-    """Handles all plotting for models evaluated by ModelEvaluator."""
+    """Handle plotting for models evaluated by ``ModelEvaluator``."""
 
     def __init__(self, evaluator: "ModelEvaluator"):
+        """Initialize the visualizer with an evaluator instance."""
         self.evaluator = evaluator
         self.df = evaluator.df
         self.target_col = evaluator.target_col
         self.models = evaluator.models
 
     def plot_roc_curves(self, save_path: str = None):
-        """Plots ROC curves for all registered models side-by-side."""
+        """Plot ROC curves for all registered models."""
         plt.figure(figsize=(8, 6))
         plt.plot([0, 1], [0, 1], "k--", label="Random")
 
@@ -41,7 +44,7 @@ class Visualizer:
         plt.show()
 
     def plot_pr_curves(self, save_path: str = None):
-        """Plots Precision-Recall curves."""
+        """Plot precision-recall curves for all registered models."""
         plt.figure(figsize=(8, 6))
         y_true = self.df[self.target_col]
         baseline = y_true.sum() / len(y_true)

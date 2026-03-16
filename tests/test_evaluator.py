@@ -1,3 +1,5 @@
+"""Unit tests for the ModelEvaluator class and its metric calculations."""
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -41,6 +43,7 @@ def ef_df():
 
 @pytest.fixture
 def ef_evaluator(ef_df):
+    """Build an evaluator for enrichment-factor tests."""
     ev = ModelEvaluator(ef_df, target_col="y")
     ev.add_model_predictions("perfect", "perfect")
     ev.add_model_predictions("bad", "bad")
@@ -48,10 +51,10 @@ def ef_evaluator(ef_df):
 
 
 class TestBaseMetrics:
-    """Tests for standard metrics calculation and the custom Metric
-    dataclass."""
+    """Test standard metric calculation and custom metric behavior."""
 
     def test_get_metrics_structure(self, evaluator):
+        """Verify the metrics table shape and column names."""
         metrics = evaluator.get_metrics()
         assert set(metrics.index) == {"good_model", "bad_model"}
         assert list(metrics.columns) == ["AUC-ROC", "AUC-PR"]
@@ -63,6 +66,7 @@ class TestBaseMetrics:
     def test_get_metrics_values(
         self, sample_df, evaluator, model_name, pred_col
     ):
+        """Verify computed metric values match sklearn outputs."""
         metrics = evaluator.get_metrics()
         y_true = sample_df["y"]
         y_proba = sample_df[pred_col]
@@ -79,6 +83,7 @@ class TestBaseMetrics:
         )
 
     def test_good_beats_bad(self, evaluator):
+        """Verify the good model outperforms the bad model."""
         metrics = evaluator.get_metrics()
         assert (
             metrics.loc["good_model", "AUC-ROC"]
@@ -97,6 +102,7 @@ class TestBaseMetrics:
         ],
     )
     def test_single_class_returns_nan_metrics(self, labels, preds):
+        """Verify if single-class inputs produce NaN for metrics."""
         df = pd.DataFrame({"y": labels, "pred": preds})
         ev = ModelEvaluator(df, target_col="y")
         ev.add_model_predictions("m1", "pred")
@@ -106,9 +112,11 @@ class TestBaseMetrics:
         assert np.isnan(metrics.loc["m1", "AUC-PR"])
 
     def test_default_metrics_are_auc_roc_and_auc_pr(self):
+        """Verify default metrics are AUC-ROC and AUC-PR."""
         assert [m.name for m in DEFAULT_METRICS] == ["AUC-ROC", "AUC-PR"]
 
     def test_custom_metric_is_used(self):
+        """Verify a custom metric is included and evaluated."""
         always_one = Metric("always_one", lambda y, p: 1.0)
         df = pd.DataFrame({"y": [0, 1], "pred": [0.1, 0.9]})
         ev = ModelEvaluator(df, target_col="y", metrics=[always_one])
@@ -119,6 +127,7 @@ class TestBaseMetrics:
         assert result.loc["m", "always_one"] == 1.0
 
     def test_custom_metric_needs_both_classes_false(self):
+        """Verify custom metrics can run without both classes."""
         count = Metric(
             "count", lambda y, p: float(len(y)), needs_both_classes=False
         )
@@ -131,9 +140,10 @@ class TestBaseMetrics:
 
 
 class TestGroupMetrics:
-    """Tests for get_metrics_by_group (e.g., Applicability Domain analysis)."""
+    """Test grouped metric computation."""
 
     def test_get_metrics_by_group_shape_and_columns(self, evaluator):
+        """Verify grouped output shape and required columns."""
         grouped = evaluator.get_metrics_by_group("region")
         assert len(grouped) == 4
         assert {"Group", "Model", "Group_Size", "AUC-ROC", "AUC-PR"}.issubset(
@@ -147,12 +157,14 @@ class TestGroupMetrics:
     def test_get_metrics_by_group_sizes(
         self, evaluator, group_name, expected_size
     ):
+        """Verify group sizes are propagated correctly."""
         grouped = evaluator.get_metrics_by_group("region")
         sizes = grouped[grouped["Group"] == group_name]["Group_Size"].unique()
         assert len(sizes) == 1
         assert sizes[0] == expected_size
 
     def test_group_with_single_class_has_nan(self):
+        """Verify single-class groups produce NaN where required."""
         df = pd.DataFrame(
             {
                 "y": [0, 1, 1, 1],
@@ -172,6 +184,7 @@ class TestGroupMetrics:
         assert np.isnan(out_row["AUC-PR"])
 
     def test_custom_metric_in_group_metrics(self):
+        """Verify custom metrics are included in grouped output."""
         fixed = Metric("fixed", lambda y, p: 42.0)
         df = pd.DataFrame(
             {
@@ -189,15 +202,17 @@ class TestGroupMetrics:
 
 
 class TestEnrichmentFactor:
-    """Tests for ranking actives and calculating the Enrichment Factor."""
+    """Test enrichment-factor computation."""
 
     def test_ef_structure(self, ef_evaluator):
+        """Verify enrichment-factor output structure."""
         result = ef_evaluator.get_enrichment_factor(top_fraction=0.1)
         assert set(result.index) == {"perfect", "bad"}
         assert "Enrichment_Factor" in result.columns
         assert "Actives_in_Top_10.0%" in result.columns
 
     def test_ef_perfect_model(self, ef_evaluator):
+        """Verify perfect ranking yields maximal enrichment."""
         result = ef_evaluator.get_enrichment_factor(top_fraction=0.1)
         assert result.loc["perfect", "Actives_in_Top_10.0%"] == 10
         assert result.loc["perfect", "Enrichment_Factor"] == pytest.approx(
@@ -205,11 +220,13 @@ class TestEnrichmentFactor:
         )
 
     def test_ef_bad_model(self, ef_evaluator):
+        """Verify inverse ranking yields minimal enrichment."""
         result = ef_evaluator.get_enrichment_factor(top_fraction=0.1)
         assert result.loc["bad", "Actives_in_Top_10.0%"] == 0
         assert result.loc["bad", "Enrichment_Factor"] == pytest.approx(0.0)
 
     def test_ef_perfect_beats_bad(self, ef_evaluator):
+        """Verify perfect model enrichment exceeds bad model enrichment."""
         result = ef_evaluator.get_enrichment_factor(top_fraction=0.1)
         assert (
             result.loc["perfect", "Enrichment_Factor"]
@@ -217,6 +234,7 @@ class TestEnrichmentFactor:
         )
 
     def test_ef_custom_fraction(self):
+        """Verify enrichment factor for a custom top fraction."""
         df = pd.DataFrame(
             {
                 "y": [1, 1, 0, 0, 0, 0],
@@ -230,6 +248,7 @@ class TestEnrichmentFactor:
         assert result.loc["m", "Enrichment_Factor"] == pytest.approx(2.0)
 
     def test_ef_top_k_at_least_one(self):
+        """Verify top-k selection uses at least one row."""
         df = pd.DataFrame({"y": [0, 1], "pred": [0.1, 0.9]})
         ev = ModelEvaluator(df, target_col="y")
         ev.add_model_predictions("m", "pred")
@@ -238,6 +257,7 @@ class TestEnrichmentFactor:
         assert result.loc["m", "Enrichment_Factor"] == pytest.approx(2.0)
 
     def test_ef_no_actives_returns_nan(self):
+        """Verify enrichment is NaN when no actives exist."""
         df = pd.DataFrame({"y": [0, 0, 0], "pred": [0.9, 0.5, 0.1]})
         ev = ModelEvaluator(df, target_col="y")
         ev.add_model_predictions("m", "pred")
@@ -246,6 +266,7 @@ class TestEnrichmentFactor:
         assert np.isnan(result.loc["m", "Enrichment_Factor"])
 
     def test_ef_all_actives(self):
+        """Verify enrichment equals 1.0 when all rows are active."""
         df = pd.DataFrame({"y": [1, 1, 1, 1], "pred": [0.9, 0.7, 0.5, 0.3]})
         ev = ModelEvaluator(df, target_col="y")
         ev.add_model_predictions("m", "pred")

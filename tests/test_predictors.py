@@ -1,19 +1,24 @@
+"""Provide tests for predictor interfaces and implementations."""
+
 import numpy as np
 import pytest
+
 from src.predictors import Predictor, SKLearnFingerprintPredictor
 
 
 class MockPredictor(Predictor):
-    """A minimal, fake predictor to test the base class pipeline."""
+    """Define a minimal fake predictor for base-pipeline tests."""
 
     def load_model(self, model_path: str) -> None:
+        """Mock model loading for the fake predictor."""
         pass
 
     def prepare_input(self, valid_smiles_list):
+        """Return validated SMILES unchanged."""
         return valid_smiles_list
 
     def predict_probability(self, prepared_input):
-        # Fake probability for each valid input
+        """Return fixed probabilities for all prepared inputs."""
         return [0.99] * len(prepared_input)
 
 
@@ -36,14 +41,11 @@ def test_predict_pipeline_empty_input():
 
     predictions = predictor.predict(bad_smiles)
 
-    assert (
-        predictions == []
-    )  
+    assert predictions == []
 
 
 def test_rf_prepare_input_generates_correct_arrays():
-    """Test if RDKit outputs the exact shape and type we need for Scikit-
-    Learn."""
+    """Test if RDKit outputs the shape and type we need for Scikit-Learn."""
     predictor = SKLearnFingerprintPredictor()
     valid_smiles = ["CCO", "c1ccccc1"]
 
@@ -55,9 +57,10 @@ def test_rf_prepare_input_generates_correct_arrays():
 
 
 class DummySklearnModel:
-    """A fake sklearn model."""
+    """Define a fake sklearn model with ``predict_proba``."""
 
     def predict_proba(self, X):
+        """Return deterministic two-class probabilities."""
         return np.array([[0.15, 0.85] for _ in range(len(X))])
 
 
@@ -84,3 +87,18 @@ def test_rf_unloaded_model_raises_error():
 
     with pytest.raises(ValueError, match="Model not loaded"):
         predictor.predict_probability(fake_fingerprints)
+
+
+def test_molformer_embeddings():
+    """Verify MolFormer embeddings have the expected output shape."""
+    from src.predictors import MolFormerMLPPredictor
+
+    predictor = MolFormerMLPPredictor()
+    valid_smiles = ["CCO", "c1ccccc1"]
+
+    embeddings = predictor.prepare_input(valid_smiles)
+    assert isinstance(embeddings, np.ndarray), "Output must be a numpy array"
+    assert embeddings.shape[0] == 2, "Must return one embedding per input"
+    assert (
+        embeddings.shape[1] == 768
+    ), "MolFormer base model should return 768-dimensional embeddings"
