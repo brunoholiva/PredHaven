@@ -133,22 +133,13 @@ class SKLearnFingerprintPredictor(Predictor):
             ECFP4 fingerprint matrix.
         """
         import numpy as np
-        from rdkit import DataStructs, RDLogger
-        from rdkit.Chem import AllChem
+        from skfp.fingerprints import ECFPFingerprint
 
-        RDLogger.DisableLog("rdApp.*")
+        fp_transformer = ECFPFingerprint(n_jobs=1)
 
-        fingerprints = []
-        for smiles in valid_smiles_list:
-            mol = Chem.MolFromSmiles(smiles)
-            fp = AllChem.GetMorganFingerprintAsBitVect(
-                mol, radius=2, nBits=2048
-            )
-            arr = np.zeros((1,), dtype=np.int8)
-            DataStructs.ConvertToNumpyArray(fp, arr)
-            fingerprints.append(arr)
+        fingerprints = fp_transformer.transform(valid_smiles_list)
 
-        return np.array(fingerprints)
+        return np.array(fingerprints, dtype=np.int8)
 
     def predict_probability(self, prepared_input: np.ndarray) -> List[float]:
         """
@@ -206,16 +197,16 @@ class MolFormerMLPPredictor(Predictor):
 
     def load_model(self, model_path: str) -> None:
         """
-        Load trained MLP model weights.
+        Load a self-contained TorchScript MLP model.
 
         Parameters
         ----------
         model_path : str
-            Path to the saved PyTorch MLP model.
+            The file path to the TorchScript MLP model to be loaded.
         """
         import torch
 
-        self.mlp = torch.load(model_path, map_location=self.device)
+        self.mlp = torch.jit.load(model_path, map_location=self.device)
         self.mlp.eval()
 
     def prepare_input(self, valid_smiles_list: List[str]) -> np.ndarray:
@@ -268,4 +259,13 @@ class MolFormerMLPPredictor(Predictor):
         List[float]
             Probability of the positive class for each input row.
         """
-        return [0.5] * len(prepared_input)
+        import torch
+
+        with torch.no_grad():
+            input_tensor = (
+                torch.from_numpy(prepared_input).float().to(self.device)
+            )
+            logits = self.mlp(input_tensor)
+            probabilities = torch.sigmoid(logits).cpu().numpy().flatten()
+
+        return probabilities.tolist()
