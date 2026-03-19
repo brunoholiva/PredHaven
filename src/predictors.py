@@ -4,7 +4,11 @@ from abc import ABC, abstractmethod
 from typing import Any, List
 
 import numpy as np
+import torch
 from rdkit import Chem
+from transformers import AutoTokenizer
+
+from models.models import MolFormerQSAR
 
 
 class Predictor(ABC):
@@ -269,3 +273,59 @@ class MolFormerMLPPredictor(Predictor):
             probabilities = torch.sigmoid(logits).cpu().numpy().flatten()
 
         return probabilities.tolist()
+
+
+class FinetunedMolFormerPredictor(Predictor):
+    """Implement a predictor using a finetuned MoLFormerQSAR model."""
+
+    def __init__(self):
+        self.device = torch.device(
+            "cuda" if torch.cuda.is_available() else "cpu"
+        )
+
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            "ibm/MoLFormer-XL-both-10pct", trust_remote_code=True
+        )
+
+        self.model = MolFormerQSAR(dropout_rate=0.0)
+        self.model.to(self.device)
+        self.model.eval()
+
+    def load_model(self, model_path: str) -> None:
+        """Load the trained weights from the MolFormerQSAR."""
+        state_dict = torch.load(model_path, map_location=self.device)
+
+        if list(state_dict.keys())[0].startswith("module."):
+            state_dict = {
+                k.replace("module.", ""): v for k, v in state_dict.items()
+            }
+
+        self.model.load_state_dict(state_dict)
+
+    def prepare_input(self, valid_smiles_list: List[str]) -> Any:
+        """Convert valid SMILES strings into tokenized tensor dictionaries."""
+        if not valid_smiles_list:
+            return {}
+
+        inputs = self.tokenizer(
+            valid_smiles_list,
+            padding=True,
+            truncation=True,
+            max_length=512,
+            return_tensors="pt",
+        )
+
+        return {k: v.to(self.device) for k, v in inputs.items()}
+
+    def predict_probability(self, prepared_input: Any) -> List[float]:
+        """Run the forward pass to get positive-class probabilities."""
+        if not prepared_input:
+            return []
+
+        with torch.no_grad():
+            probs = self.model.predict_proba(
+                input_ids=prepared_input["input_ids"],
+                attention_mask=prepared_input["attention_mask"],
+            )
+
+        return probs.squeeze(-1).cpu().numpy().tolist()
